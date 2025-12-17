@@ -73,14 +73,15 @@ TEMPLATES = [
 WSGI_APPLICATION = 'llm_monitor.wsgi.application'
 
 # Database Configuration - PostgreSQL
+# Support both local (DB_*) and Vercel (POSTGRES_*) environment variables
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME', default='llm_monitor_db'),
-        'USER': config('DB_USER', default='postgres'),
-        'PASSWORD': config('DB_PASSWORD', default=''),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default='5432'),
+        'NAME': config('POSTGRES_DATABASE', default=config('DB_NAME', default='llm_monitor_db')),
+        'USER': config('POSTGRES_USER', default=config('DB_USER', default='postgres')),
+        'PASSWORD': config('POSTGRES_PASSWORD', default=config('DB_PASSWORD', default='')),
+        'HOST': config('POSTGRES_HOST', default=config('DB_HOST', default='localhost')),
+        'PORT': config('POSTGRES_PORT', default=config('DB_PORT', default='5432')),
         'OPTIONS': {
             'connect_timeout': 10,
         },
