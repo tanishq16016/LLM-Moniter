@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Profile{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Profile</h1>
+</div>
+
+<div style="display: grid; grid-template-columns: 350px 1fr; gap: 24px; max-width: 1000px;">
+    <!-- Left Column - Profile Info -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Profile Header Card -->
+        <div class="card">
+            <div class="card-body" style="padding: 32px; text-align: center;">
+                <div style="width: 100px; height: 100px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-primary) 0%, #6366f1 100%); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; box-shadow: 0 8px 24px rgba(79, 70, 229, 0.25);">
+                    <i class="bi bi-person-fill" style="font-size: 48px; color: white;"></i>
+                </div>
+                <h3 style="font-size: 22px; font-weight: 600; margin-bottom: 6px; color: var(--text-primary);">{{ user.get_full_name|default:user.username }}</h3>
+                <p style="color: var(--text-secondary); font-size: 14px; margin: 0 0 12px 0;">{{ user.email|default:"No email set" }}</p>
+                
+                <!-- User Type Badge -->
+                {% if is_superuser %}
+                <span class="badge" style="background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: white; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 20px;">
+                    <i class="bi bi-shield-check" style="margin-right: 4px;"></i> Administrator
+                </span>
+                {% else %}
+                <span class="badge" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 20px;">
+                    <i class="bi bi-person" style="margin-right: 4px;"></i> Standard User
+                </span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Account Stats Card -->
+        <div class="card">
+            <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color);">
+                <i class="bi bi-info-circle" style="margin-right: 8px; color: var(--accent-primary);"></i>
+                Account Details
+            </div>
+            <div class="card-body" style="padding: 20px;">
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--border-light);">
+                        <span style="color: var(--text-secondary); font-size: 13px;"><i class="bi bi-calendar3" style="margin-right: 8px;"></i>Member Since</span>
+                        <span style="font-weight: 500; color: var(--text-primary); font-size: 13px;">{{ user.date_joined|date:"M d, Y" }}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; border-bottom: 1px solid var(--border-light);">
+                        <span style="color: var(--text-secondary); font-size: 13px;"><i class="bi bi-clock" style="margin-right: 8px;"></i>Last Login</span>
+                        <span style="font-weight: 500; color: var(--text-primary); font-size: 13px;">{{ user.last_login|date:"M d, Y H:i"|default:"Never" }}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="color: var(--text-secondary); font-size: 13px;"><i class="bi bi-person-badge" style="margin-right: 8px;"></i>Account Type</span>
+                        <span style="font-weight: 500; color: var(--text-primary); font-size: 13px;">{% if is_superuser %}Administrator{% else %}Standard{% endif %}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column - Edit Form -->
+    <div class="card">
+        <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border-color);">
+            <i class="bi bi-pencil-square" style="margin-right: 8px; color: var(--accent-primary);"></i>
+            Edit Profile
+        </div>
+        <div class="card-body" style="padding: 24px;">
+            <form method="POST" action="{% url 'dashboard:profile' %}">
+                {% csrf_token %}
+                
+                <div style="display: grid; gap: 24px;">
+                    <!-- Username (readonly) -->
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-weight: 500; margin-bottom: 8px; display: block; color: var(--text-primary);">
+                            <i class="bi bi-at" style="margin-right: 6px; color: var(--text-muted);"></i>Username
+                        </label>
+                        <input type="text" class="form-control" name="username" value="{% if user_data.username %}{{ user_data.username }}{% elif user.username %}{{ user.username }}{% else %}Anonymous{% endif %}" readonly 
+                               style="background: var(--bg-hover); cursor: not-allowed; opacity: 0.8; border: 1px solid var(--border-color);">
+                        <small style="color: var(--text-muted); font-size: 12px; margin-top: 6px; display: block;">Username cannot be changed</small>
+                    </div>
+                    
+                    <!-- First & Last Name Row -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-weight: 500; margin-bottom: 8px; display: block; color: var(--text-primary);">
+                                <i class="bi bi-person" style="margin-right: 6px; color: var(--text-muted);"></i>First Name
+                            </label>
+                            <input type="text" class="form-control" name="first_name" value="{{ user_data.first_name }}" placeholder="Enter first name" style="border: 1px solid var(--border-color);">
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label" style="font-weight: 500; margin-bottom: 8px; display: block; color: var(--text-primary);">
+                                <i class="bi bi-person" style="margin-right: 6px; color: var(--text-muted);"></i>Last Name
+                            </label>
+                            <input type="text" class="form-control" name="last_name" value="{{ user_data.last_name }}" placeholder="Enter last name" style="border: 1px solid var(--border-color);">
+                        </div>
+                    </div>
+                    
+                    <!-- Email -->
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label class="form-label" style="font-weight: 500; margin-bottom: 8px; display: block; color: var(--text-primary);">
+                            <i class="bi bi-envelope" style="margin-right: 6px; color: var(--text-muted);"></i>Email Address
+                        </label>
+                        <input type="email" class="form-control" name="email" value="{{ user_data.email }}" placeholder="your.email@example.com" style="border: 1px solid var(--border-color);">
+                    </div>
+                </div>
+                
+                <div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--border-color);">
+                    <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px; font-weight: 600; font-size: 14px;">
+                        <i class="bi bi-check-lg" style="margin-right: 6px;"></i> Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    @media (max-width: 768px) {
+        div[style*="grid-template-columns: 350px 1fr"] {
+            grid-template-columns: 1fr !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Show success message if updated
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('updated') === 'true') {
+    showToast('Profile updated successfully!', 'success');
+    // Clean URL
+    window.history.replaceState({}, document.title, window.location.pathname);
+}
+</script>
+{% endblock %}

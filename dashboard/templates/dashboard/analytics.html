@@ -1,0 +1,290 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Analytics{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+            <h1 class="page-title" style="display: inline;">Analytics</h1>
+            {% if is_superuser %}
+            <span class="badge bg-primary" style="font-size: 0.7rem; margin-left: 8px;">Admin View - All Users' Data</span>
+            {% endif %}
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+            <select class="form-control" id="dateRange" style="width: auto;">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+            </select>
+            <button class="btn btn-secondary" id="exportBtn">
+                <i class="bi bi-download"></i> Export CSV
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
+    <div class="stat-card">
+        <div class="stat-icon" style="background: #f8f9fc; color: #4f46e5;">
+            <i class="bi bi-chat-text"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value" id="totalRequests">-</div>
+            <div class="stat-label">Total Requests</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: #f0fdf9; color: #059669;">
+            <i class="bi bi-coin"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value" id="totalTokens">-</div>
+            <div class="stat-label">Total Tokens</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: #fef9f0; color: #d97706;">
+            <i class="bi bi-currency-dollar"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value" id="totalCost">-</div>
+            <div class="stat-label">Total Cost</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon" style="background: #f8f5fc; color: #7c3aed;">
+            <i class="bi bi-speedometer2"></i>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value" id="avgLatency">-</div>
+            <div class="stat-label">Avg Latency</div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title"><i class="bi bi-bar-chart" style="margin-right: 8px;"></i> Daily Token Usage</div>
+        </div>
+        <div class="card-body">
+            <canvas id="usageChart" height="280"></canvas>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title"><i class="bi bi-graph-up" style="margin-right: 8px;"></i> Daily Cost & Latency</div>
+        </div>
+        <div class="card-body">
+            <canvas id="costChart" height="280"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity Table -->
+<div class="table-card">
+    <div class="table-header">
+        <div class="table-title">Recent Activity</div>
+    </div>
+    <div style="overflow-x: auto;">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Tokens</th>
+                    <th>Cost</th>
+                    <th>Latency</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="activityTable">
+                <tr>
+                    <td colspan="5" style="padding: 40px; text-align: center; color: var(--text-muted);">
+                        Loading data...
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let usageChart, costChart;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadAnalytics();
+    
+    document.getElementById('dateRange').addEventListener('change', loadAnalytics);
+    document.getElementById('exportBtn').addEventListener('click', exportData);
+});
+
+async function loadAnalytics() {
+    const days = document.getElementById('dateRange').value;
+    
+    try {
+        // Load overview stats
+        const overviewRes = await fetch('/api/analytics/overview/');
+        const overview = await overviewRes.json();
+        
+        // Update stats
+        document.getElementById('totalRequests').textContent = formatNumber(overview.total_requests_all || 0);
+        document.getElementById('totalTokens').textContent = formatNumber(overview.total_tokens || 0);
+        document.getElementById('totalCost').textContent = '$' + (overview.total_cost_usd || 0).toFixed(4);
+        document.getElementById('avgLatency').textContent = (overview.average_latency_ms || 0).toFixed(0) + 'ms';
+        
+        // Load chart data
+        const chartsRes = await fetch(`/api/analytics/charts/?days=${days}`);
+        const charts = await chartsRes.json();
+        
+        // Update charts
+        updateCharts(charts);
+        
+        // Load recent traces
+        const tracesRes = await fetch('/api/traces/?page_size=20');
+        const traces = await tracesRes.json();
+        
+        // Update table
+        updateTable(traces.results || []);
+        
+    } catch (e) {
+        console.error('Failed to load analytics:', e);
+    }
+}
+
+function updateCharts(data) {
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: true, position: 'top' }
+        },
+        scales: {
+            x: {
+                grid: { display: false },
+                ticks: { color: '#64748b', font: { size: 11 } }
+            },
+            y: {
+                grid: { color: '#e2e8f0' },
+                ticks: { color: '#64748b', font: { size: 11 } },
+                beginAtZero: true
+            }
+        }
+    };
+    
+    // Daily Token Usage Chart
+    if (data.tokens_over_time && data.tokens_over_time.length > 0) {
+        const labels = data.tokens_over_time.map(d => {
+            const date = new Date(d.period);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        });
+        const inputTokens = data.tokens_over_time.map(d => d.input_tokens || 0);
+        const outputTokens = data.tokens_over_time.map(d => d.output_tokens || 0);
+        
+        if (usageChart) usageChart.destroy();
+        usageChart = new Chart(document.getElementById('usageChart'), {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Input Tokens',
+                        data: inputTokens,
+                        backgroundColor: 'rgba(79, 70, 229, 0.8)',
+                        borderRadius: 6
+                    },
+                    {
+                        label: 'Output Tokens',
+                        data: outputTokens,
+                        backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                        borderRadius: 6
+                    }
+                ]
+            },
+            options: chartOptions
+        });
+    }
+    
+    // Cost Trend Chart - calculate daily costs from cost_by_model
+    if (data.tokens_over_time && data.tokens_over_time.length > 0 && data.latency_trends && data.latency_trends.length > 0) {
+        const labels = data.tokens_over_time.map(d => {
+            const date = new Date(d.period);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        });
+        
+        // Use latency trends for latency line
+        const latencies = data.latency_trends.map(d => d.avg_latency || 0);
+        
+        if (costChart) costChart.destroy();
+        costChart = new Chart(document.getElementById('costChart'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Avg Latency (ms)',
+                    data: latencies,
+                    borderColor: '#d97706',
+                    backgroundColor: 'rgba(217, 119, 6, 0.05)',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#d97706',
+                    yAxisID: 'y'
+                }]
+            },
+            options: {
+                ...chartOptions,
+                scales: {
+                    ...chartOptions.scales,
+                    y: {
+                        ...chartOptions.scales.y,
+                        title: { display: true, text: 'Latency (ms)' }
+                    }
+                }
+            }
+        });
+    }
+}
+
+function updateTable(traces) {
+    const tbody = document.getElementById('activityTable');
+    
+    if (!traces || traces.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding: 40px;">No data yet. Go to Test page and send some requests!</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = traces.map(t => `
+        <tr>
+            <td>${formatExactTime(t.timestamp, false)}</td>
+            <td>${t.total_tokens || 0}</td>
+            <td>$${parseFloat(t.cost_usd || 0).toFixed(6)}</td>
+            <td>${(t.latency_ms || 0).toFixed(0)}ms</td>
+            <td><span class="badge ${t.status === 'success' ? 'badge-success' : 'badge-danger'}">${t.status}</span></td>
+        </tr>
+    `).join('');
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+}
+
+async function exportData() {
+    try {
+        window.location.href = '/api/traces/export/';
+        showToast('Export started', 'success');
+    } catch (e) {
+        showToast('Export failed', 'danger');
+    }
+}
+</script>
+{% endblock %}

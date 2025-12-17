@@ -1,0 +1,230 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Settings</h1>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 24px; max-width: 1200px;">
+    <!-- API Configuration -->
+    <div class="settings-section">
+        <div class="settings-title">
+            <i class="bi bi-key" style="margin-right: 8px; color: #4f46e5;"></i> API Configuration
+        </div>
+        
+        <form id="apiKeyForm">
+            <div class="form-group">
+                <label class="form-label">Groq API Key</label>
+                <input type="password" class="form-control" id="apiKeyInput" 
+                    placeholder="gsk_xxxxxxxxxxxxxxxxxxxx" value="{{ api_key|default:'' }}" autocomplete="off">
+                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                    Your API key is securely encrypted and stored.
+                </p>
+            </div>
+            
+            <div style="display: flex; gap: 12px;">
+                <button type="button" class="btn btn-primary" id="saveKeyBtn" style="flex: 1;">
+                    <i class="bi bi-check-lg"></i> Save Key
+                </button>
+                <button type="button" class="btn btn-secondary" id="testKeyBtn" {% if not api_key %}disabled{% endif %} style="flex: 1;">
+                    <i class="bi bi-lightning"></i> Test Connection
+                </button>
+            </div>
+        </form>
+        
+        <div id="testResult" style="margin-top: 16px; display: none;"></div>
+    </div>
+    
+    <!-- Model Info -->
+    <div class="settings-section">
+        <div class="settings-title">
+            <i class="bi bi-cpu" style="margin-right: 8px; color: #059669;"></i> Active Model
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--bg-primary); border-radius: 8px;">
+            <div style="width: 56px; height: 56px; background: #f0fdf9; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #059669; font-size: 24px; flex-shrink: 0;">
+                <i class="bi bi-cpu"></i>
+            </div>
+            <div style="flex: 1;">
+                <div style="font-weight: 600; color: var(--text-primary); font-size: 14px;">llama-3.1-8b-instant</div>
+                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">$0.05 / 1M input tokens</div>
+                <div style="font-size: 12px; color: var(--text-secondary);">$0.08 / 1M output tokens</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Data Management -->
+    <div class="settings-section">
+        <div class="settings-title">
+            <i class="bi bi-trash" style="margin-right: 8px; color: #ef4444;"></i> Data Management
+        </div>
+        
+        <div class="form-group">
+            <label class="form-label">Clear Data</label>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+                Remove all traces and analytics data from the database. This action cannot be undone.
+            </p>
+            <button type="button" class="btn btn-danger" id="clearDataBtn" style="width: 100%;">
+                <i class="bi bi-trash"></i> Clear All Data
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Clear Data Modal -->
+<div id="clearDataModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-card); border-radius: 12px; box-shadow: 0 20px 25px rgba(0,0,0,0.1); max-width: 400px; width: 90%; padding: 0;">
+        <div style="padding: 24px; border-bottom: 1px solid var(--border-color);">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 48px; height: 48px; background: #fef2f2; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #ef4444; font-size: 24px;">
+                    <i class="bi bi-exclamation-triangle"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 16px; font-weight: 600;">Clear All Data?</h3>
+                    <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-secondary);">This action cannot be undone</p>
+                </div>
+            </div>
+        </div>
+        <div style="padding: 16px 24px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;">
+            All LLM traces and analytics data will be permanently deleted from the database. Make sure you have backed up any important data.
+        </div>
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; gap: 12px;">
+            <button type="button" id="cancelClearBtn" style="flex: 1; padding: 10px; border: 1px solid var(--border-color); background: var(--bg-secondary); border-radius: 6px; cursor: pointer; font-weight: 500; color: var(--text-primary);">
+                Cancel
+            </button>
+            <button type="button" id="confirmClearBtn" style="flex: 1; padding: 10px; background: #ef4444; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; color: white;">
+                <i class="bi bi-trash"></i> Delete Data
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('saveKeyBtn').addEventListener('click', async function() {
+    const apiKey = document.getElementById('apiKeyInput').value.trim();
+    
+    if (!apiKey) {
+        showToast('Please enter an API key', 'danger');
+        return;
+    }
+    
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner"></span> Saving...';
+    
+    try {
+        const res = await fetch('/api/config/groq-key/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ api_key: apiKey })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            showToast('API key saved!', 'success');
+            document.getElementById('testKeyBtn').disabled = false;
+        } else {
+            showToast('Failed to save: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    } catch (e) {
+        showToast('Save failed', 'danger');
+    } finally {
+        this.disabled = false;
+        this.innerHTML = '<i class="bi bi-check-lg"></i> Save Key';
+    }
+});
+
+document.getElementById('testKeyBtn').addEventListener('click', async function() {
+    const resultDiv = document.getElementById('testResult');
+    
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner"></span> Testing...';
+    resultDiv.style.display = 'none';
+    
+    try {
+        const res = await fetch('/api/config/test-connection/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            resultDiv.innerHTML = '<div style="padding: 12px; background: #d4edda; color: #155724; border-radius: 6px;"><i class="bi bi-check-circle"></i> Connection successful!</div>';
+            showToast('Connection successful!', 'success');
+        } else {
+            resultDiv.innerHTML = `<div style="padding: 12px; background: #f8d7da; color: #721c24; border-radius: 6px;"><i class="bi bi-x-circle"></i> ${data.message || data.error}</div>`;
+            showToast('Connection failed', 'danger');
+        }
+        resultDiv.style.display = 'block';
+    } catch (e) {
+        resultDiv.innerHTML = '<div style="padding: 12px; background: #f8d7da; color: #721c24; border-radius: 6px;"><i class="bi bi-x-circle"></i> Test failed</div>';
+        resultDiv.style.display = 'block';
+        showToast('Test failed', 'danger');
+    } finally {
+        this.disabled = false;
+        this.innerHTML = '<i class="bi bi-lightning"></i> Test Connection';
+    }
+});
+
+document.getElementById('clearDataBtn').addEventListener('click', function() {
+    const modal = document.getElementById('clearDataModal');
+    modal.style.display = 'flex';
+});
+
+document.getElementById('cancelClearBtn').addEventListener('click', function() {
+    const modal = document.getElementById('clearDataModal');
+    modal.style.display = 'none';
+});
+
+document.getElementById('confirmClearBtn').addEventListener('click', async function() {
+    const modal = document.getElementById('clearDataModal');
+    const btn = this;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Deleting...';
+    
+    try {
+        const res = await fetch('/api/clear-data/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            }
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            modal.style.display = 'none';
+            showToast('All data cleared successfully!', 'success');
+        } else {
+            showToast('Failed to clear data: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    } catch (e) {
+        showToast('Clear failed: ' + e.message, 'danger');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-trash"></i> Delete Data';
+    }
+});
+
+// Close modal when clicking outside
+document.getElementById('clearDataModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        this.style.display = 'none';
+    }
+});
+</script>
+{% endblock %}

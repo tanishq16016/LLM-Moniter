@@ -1,0 +1,379 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Test LLM{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Test LLM</h1>
+        <p style="color: var(--text-secondary); font-size: 14px; margin-top: 4px;">
+            Send test prompts to the LLM and see real-time responses with detailed metrics
+        </p>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+    <!-- Input Section -->
+    <div class="settings-section">
+        <div class="settings-title"><i class="bi bi-pencil-square" style="margin-right: 8px;"></i> Send Request</div>
+        
+        {% if not has_api_key %}
+        <div style="background: #fef3cd; padding: 12px 16px; border-radius: 6px; margin-bottom: 16px; color: #856404;">
+            <i class="bi bi-exclamation-triangle"></i> 
+            <a href="{% url 'dashboard:settings' %}">Configure your API key</a> first.
+        </div>
+        {% endif %}
+        
+        <div class="form-group">
+            <label class="form-label">Prompt</label>
+            <textarea class="form-control" id="promptInput" rows="12" 
+                placeholder="Enter your prompt here..." {% if not has_api_key %}disabled{% endif %}></textarea>
+            <div class="text-muted mt-2" style="font-size: 12px;">
+                <span id="charCount">0</span> characters
+            </div>
+        </div>
+
+        <button class="btn btn-primary" id="sendBtn" style="width: 100%;" {% if not has_api_key %}disabled{% endif %}>
+            <i class="bi bi-send"></i> Send Request
+        </button>
+        <p style="font-size: 11px; color: var(--text-secondary); margin-top: 8px; text-align: center;">
+            💡 Tip: Press Ctrl+Enter to send
+        </p>
+    </div>
+    
+    <!-- Output Section -->
+    <div class="settings-section">
+        <div class="settings-title"><i class="bi bi-chat-dots" style="margin-right: 8px;"></i> Response</div>
+        
+        <div class="response-area" id="responseArea">
+            <span class="text-muted">Response will appear here...</span>
+        </div>
+        
+        <div class="metrics-row" id="metricsRow" style="display: none;">
+            <div class="metric-item">
+                <div class="metric-value" id="metricTokens">-</div>
+                <div class="metric-label">Total Tokens</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-value" id="metricLatency">-</div>
+                <div class="metric-label">Latency</div>
+            </div>
+            <div class="metric-item">
+                <div class="metric-value" id="metricCost">-</div>
+                <div class="metric-label">Cost</div>
+            </div>
+        </div>
+        
+        <!-- Feedback Section - Only shows after response -->
+        <div id="feedbackSection" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+            <div style="text-align: center;">
+                <button class="btn btn-outline-primary" id="rateResponseBtn" 
+                        style="padding: 8px 20px; border-radius: 6px;">
+                    <i class="bi bi-star"></i> Rate This Response
+                </button>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-top: 8px;">
+                    Help us improve by rating the quality of this response
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Feedback Modal -->
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 12px; border: none; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            <div class="modal-header" style="border-bottom: 1px solid #e5e7eb; padding: 20px;">
+                <h5 class="modal-title" id="feedbackModalLabel" style="font-weight: 600; color: #1f2937;">
+                    <i class="bi bi-star-fill" style="color: #f59e0b;"></i> Rate This Response
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding: 24px;">
+                <input type="hidden" id="feedbackTraceId">
+                
+                <div class="mb-4">
+                    <label class="form-label" style="font-weight: 500; color: #374151; margin-bottom: 12px;">
+                        How would you rate this response?
+                    </label>
+                    <div class="star-rating" id="starRating" style="display: flex; gap: 12px; font-size: 36px; cursor: pointer; justify-content: center;">
+                        <i class="bi bi-star" data-rating="1"></i>
+                        <i class="bi bi-star" data-rating="2"></i>
+                        <i class="bi bi-star" data-rating="3"></i>
+                        <i class="bi bi-star" data-rating="4"></i>
+                        <i class="bi bi-star" data-rating="5"></i>
+                    </div>
+                    <input type="hidden" id="feedbackRating">
+                    <div id="ratingText" style="margin-top: 12px; font-size: 14px; color: #6b7280; text-align: center; min-height: 20px;"></div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="feedbackComment" class="form-label" style="font-weight: 500; color: #374151;">
+                        Additional Comments (Optional)
+                    </label>
+                    <textarea class="form-control" id="feedbackComment" rows="3" 
+                              placeholder="Share your thoughts about this response..."
+                              style="border: 1px solid #d1d5db; border-radius: 8px; padding: 12px;"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: 1px solid #e5e7eb; padding: 16px 24px;">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" 
+                        style="padding: 10px 20px; border-radius: 8px;">Cancel</button>
+                <button type="button" class="btn btn-primary" id="submitFeedbackBtn"
+                        style="padding: 10px 20px; border-radius: 8px;">
+                    <i class="bi bi-check-lg"></i> Submit Feedback
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .star-rating i {
+        color: #d1d5db;
+        transition: all 0.2s ease;
+    }
+    .star-rating i:hover,
+    .star-rating i.hovered {
+        transform: scale(1.1);
+    }
+    .star-rating i.active {
+        color: #f59e0b !important;
+    }
+    .modal-backdrop {
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Variables
+const promptInput = document.getElementById('promptInput');
+const charCount = document.getElementById('charCount');
+const sendBtn = document.getElementById('sendBtn');
+let currentTraceId = null;
+let feedbackModal = null;
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Bootstrap modal
+    feedbackModal = new bootstrap.Modal(document.getElementById('feedbackModal'));
+    
+    // Setup star rating
+    setupStarRating();
+    
+    // Setup event listeners
+    promptInput.addEventListener('input', function() {
+        charCount.textContent = this.value.length;
+    });
+    
+    sendBtn.addEventListener('click', sendRequest);
+    
+    promptInput.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'Enter') {
+            sendRequest();
+        }
+    });
+    
+    // Rate button click
+    document.getElementById('rateResponseBtn').addEventListener('click', function() {
+        if (currentTraceId) {
+            openFeedbackModal(currentTraceId);
+        }
+    });
+    
+    // Submit feedback button
+    document.getElementById('submitFeedbackBtn').addEventListener('click', submitFeedback);
+});
+
+// Setup star rating functionality
+function setupStarRating() {
+    const stars = document.querySelectorAll('#starRating i');
+    const ratingInput = document.getElementById('feedbackRating');
+    const ratingText = document.getElementById('ratingText');
+    
+    const ratingLabels = {
+        1: '👎 Poor',
+        2: '😐 Fair', 
+        3: '👍 Good',
+        4: '⭐ Great',
+        5: '🌟 Excellent'
+    };
+    
+    stars.forEach((star, index) => {
+        // Hover effect
+        star.addEventListener('mouseenter', function() {
+            highlightStars(index + 1, true);
+        });
+        
+        // Click to select
+        star.addEventListener('click', function() {
+            const rating = index + 1;
+            ratingInput.value = rating;
+            ratingText.textContent = ratingLabels[rating];
+            ratingText.style.color = '#059669';
+            highlightStars(rating, false);
+        });
+    });
+    
+    // Mouse leave - reset to selected value
+    document.getElementById('starRating').addEventListener('mouseleave', function() {
+        const currentRating = parseInt(ratingInput.value) || 0;
+        highlightStars(currentRating, false);
+    });
+    
+    function highlightStars(count, isHover) {
+        stars.forEach((star, index) => {
+            if (index < count) {
+                star.classList.remove('bi-star');
+                star.classList.add('bi-star-fill');
+                star.classList.add('active');
+            } else {
+                star.classList.remove('bi-star-fill');
+                star.classList.add('bi-star');
+                star.classList.remove('active');
+            }
+        });
+    }
+}
+
+// Open feedback modal
+function openFeedbackModal(traceId) {
+    document.getElementById('feedbackTraceId').value = traceId;
+    document.getElementById('feedbackRating').value = '';
+    document.getElementById('feedbackComment').value = '';
+    document.getElementById('ratingText').textContent = '';
+    
+    // Reset stars
+    document.querySelectorAll('#starRating i').forEach(star => {
+        star.classList.remove('bi-star-fill', 'active');
+        star.classList.add('bi-star');
+    });
+    
+    feedbackModal.show();
+}
+
+// Submit feedback
+async function submitFeedback() {
+    const traceId = document.getElementById('feedbackTraceId').value;
+    const rating = document.getElementById('feedbackRating').value;
+    const comment = document.getElementById('feedbackComment').value;
+    
+    if (!rating) {
+        showToast('Please select a rating', 'warning');
+        return;
+    }
+    
+    const submitBtn = document.getElementById('submitFeedbackBtn');
+    const originalHtml = submitBtn.innerHTML;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...';
+    
+    try {
+        const response = await fetch('/api/feedback/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                trace: parseInt(traceId),
+                rating: parseInt(rating),
+                comment: comment
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            feedbackModal.hide();
+            showToast('Thank you for your feedback! 🎉', 'success');
+            
+            // Update button to show feedback was given
+            const rateBtn = document.getElementById('rateResponseBtn');
+            rateBtn.innerHTML = '<i class="bi bi-star-fill" style="color: #f59e0b;"></i> Feedback Submitted';
+            rateBtn.disabled = true;
+            rateBtn.classList.remove('btn-outline-primary');
+            rateBtn.classList.add('btn-outline-success');
+        } else {
+            showToast(data.error || 'Failed to submit feedback', 'danger');
+        }
+    } catch (error) {
+        console.error('Error submitting feedback:', error);
+        showToast('Failed to submit feedback. Please try again.', 'danger');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalHtml;
+    }
+}
+
+// Send LLM request
+async function sendRequest() {
+    const prompt = promptInput.value.trim();
+    if (!prompt) {
+        showToast('Please enter a prompt', 'danger');
+        return;
+    }
+    
+    const responseArea = document.getElementById('responseArea');
+    const metricsRow = document.getElementById('metricsRow');
+    const feedbackSection = document.getElementById('feedbackSection');
+    
+    // Reset feedback button
+    const rateBtn = document.getElementById('rateResponseBtn');
+    rateBtn.innerHTML = '<i class="bi bi-star"></i> Rate This Response';
+    rateBtn.disabled = false;
+    rateBtn.classList.remove('btn-outline-success');
+    rateBtn.classList.add('btn-outline-primary');
+    
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Sending...';
+    responseArea.innerHTML = '<span class="text-muted">Generating response...</span>';
+    metricsRow.style.display = 'none';
+    feedbackSection.style.display = 'none';
+    
+    try {
+        const res = await fetch('/api/test-llm/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({
+                prompt: prompt,
+                model: 'llama-3.1-8b-instant'
+            })
+        });
+        
+        const data = await res.json();
+        
+        if (data.error) {
+            responseArea.innerHTML = `<span class="text-danger">${data.error}</span>`;
+            showToast('Error: ' + data.error, 'danger');
+            feedbackSection.style.display = 'none';
+        } else {
+            responseArea.textContent = data.response;
+            
+            document.getElementById('metricTokens').textContent = data.total_tokens;
+            document.getElementById('metricLatency').textContent = data.latency_ms.toFixed(0) + 'ms';
+            document.getElementById('metricCost').textContent = '$' + data.cost_usd.toFixed(6);
+            metricsRow.style.display = 'flex';
+            
+            // Store trace ID and show feedback section
+            currentTraceId = data.trace_id;
+            feedbackSection.style.display = 'block';
+            
+            showToast('Response generated!', 'success');
+        }
+    } catch (e) {
+        responseArea.innerHTML = '<span class="text-danger">Request failed. Please check your connection.</span>';
+        showToast('Request failed', 'danger');
+    } finally {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<i class="bi bi-send"></i> Send Request';
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Dashboard{% endblock %} - LLM Monitor</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% load static %}{% static 'css/custom.css' %}">
+</head>
+<body>
+    <div class="wrapper">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-brand">
+                <h4><i class="bi bi-activity"></i> LLM Monitor</h4>
+            </div>
+            <div class="sidebar-nav">
+                <ul style="list-style: none; padding: 0; margin: 0;">
+                    <li class="nav-item">
+                        <a href="{% url 'dashboard:home' %}" class="nav-link {% if request.path == '/' %}active{% endif %}">
+                            <i class="bi bi-grid-1x2"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{% url 'dashboard:test' %}" class="nav-link {% if 'test' in request.path %}active{% endif %}">
+                            <i class="bi bi-play-circle"></i> Test LLM
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{% url 'dashboard:analytics' %}" class="nav-link {% if 'analytics' in request.path %}active{% endif %}">
+                            <i class="bi bi-bar-chart"></i> Analytics
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- Logout Confirmation Modal -->
+    {% if user.is_authenticated %}
+    <div class="modal-overlay" id="logoutModal">
+        <div class="logout-modal">
+            <div class="logout-modal-icon">
+                <i class="bi bi-box-arrow-right"></i>
+            </div>
+            <h3 class="logout-modal-title">Sign Out</h3>
+            <p class="logout-modal-text">Are you sure you want to sign out of your account?</p>
+            <div class="logout-modal-actions">
+                <button class="btn-modal-cancel" id="cancelLogout">Cancel</button>
+                <form method="POST" action="{% url 'account_logout' %}" style="margin: 0;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-modal-logout">Sign Out</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts -->
+    {% load static %}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Toast Messages -->
+    {% include 'account/messages.html' %}
+    <script src="{% static 'js/utils.js' %}"></script>
+    <script src="{% static 'js/charts.js' %}"></script>
+    
+    <!-- Logout Modal Handler -->
+    <script>
+        // Handle cancel button for logout modal
+        const cancelLogoutBtn = document.getElementById('cancelLogout');
+        const logoutModal = document.getElementById('logoutModal');
+        
+        if (cancelLogoutBtn && logoutModal) {
+            cancelLogoutBtn.addEventListener('click', function() {
+                logoutModal.classList.remove('show');
+            });
+            
+            // Close modal when clicking outside
+            logoutModal.addEventListener('click', function(e) {
+                if (e.target === logoutModal) {
+                    logoutModal.classList.remove('show');
+                }
+            });
+        }
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

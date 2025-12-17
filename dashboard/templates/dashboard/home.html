@@ -1,0 +1,338 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Dashboard</h1>
+        {% if is_superuser %}
+        <span class="badge bg-primary" style="font-size: 0.7rem; margin-left: 8px;">Admin View - All Users' Data</span>
+        {% endif %}
+    </div>
+    <div style="display: flex; gap: 12px; align-items: center;">
+        <button class="btn btn-secondary btn-sm" onclick="refreshDashboard()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+        
+        <!-- User Profile Dropdown in Header -->
+        <div class="header-user-menu" style="position: relative;">
+            <button class="btn btn-outline-secondary btn-sm header-profile-btn" id="headerUserToggle" style="border-radius: 50%; width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                <i class="bi bi-person-circle" style="font-size: 18px;"></i>
+            </button>
+            
+            <div class="header-dropdown" id="headerDropdown">
+                {% if user.is_authenticated %}
+                <div class="header-dropdown-header">
+                    <span class="header-user-name">{{ user.username }}</span>
+                    <span class="header-user-email">{{ user.email|default:"No email" }}</span>
+                </div>
+                <div class="header-dropdown-divider"></div>
+                <a href="{% url 'dashboard:profile' %}" class="header-dropdown-item">
+                    <i class="bi bi-person"></i> Profile
+                </a>
+                <a href="{% url 'dashboard:settings' %}" class="header-dropdown-item">
+                    <i class="bi bi-gear"></i> Settings
+                </a>
+                <div class="header-dropdown-divider"></div>
+                <a href="#" class="header-dropdown-item header-logout-item" id="headerLogoutBtn">
+                    <i class="bi bi-box-arrow-right"></i> Sign Out
+                </a>
+                {% else %}
+                <a href="{% url 'account_login' %}" class="header-dropdown-item">
+                    <i class="bi bi-box-arrow-in-right"></i> Sign In
+                </a>
+                <a href="{% url 'account_signup' %}" class="header-dropdown-item">
+                    <i class="bi bi-person-plus"></i> Create Account
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Total Requests</div>
+        <div class="stat-value" id="totalRequests">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Avg Latency</div>
+        <div class="stat-value" id="avgLatency">0ms</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Total Tokens</div>
+        <div class="stat-value success" id="totalTokens">0</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Total Cost</div>
+        <div class="stat-value warning" id="totalCost">$0.00</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Error Rate</div>
+        <div class="stat-value danger" id="errorRate">0%</div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="chart-grid">
+    <div class="chart-card">
+        <div class="chart-title">Token Usage (7 Days)</div>
+        <div class="chart-container">
+            <canvas id="tokenUsageChart"></canvas>
+        </div>
+    </div>
+    <div class="chart-card">
+        <div class="chart-title">Request Status</div>
+        <div class="chart-container">
+            <canvas id="statusChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Traces -->
+<div class="table-card">
+    <div class="table-header">
+        <div class="table-title">Recent Requests</div>
+    </div>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>User</th>
+                <th>Tokens</th>
+                <th>Latency</th>
+                <th>Cost</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody id="tracesTable">
+            <tr>
+                <td colspan="6" class="empty-state">
+                    <div class="spinner"></div>
+                    <span style="margin-left: 10px;">Loading...</span>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+    <span class="text-muted" id="showingCount">Showing 0 traces</span>
+    <ul class="pagination" id="pagination"></ul>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let tokenChart, statusChart;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboard();
+    setInterval(loadDashboard, 30000);
+});
+
+async function loadDashboard() {
+    await Promise.all([loadStats(), loadCharts(), loadTraces()]);
+}
+
+async function refreshDashboard() {
+    await loadDashboard();
+    showToast('Dashboard refreshed', 'success');
+}
+
+async function loadStats() {
+    try {
+        const res = await fetch('/api/analytics/overview/');
+        const data = await res.json();
+        
+        document.getElementById('totalRequests').textContent = formatNumber(data.total_requests_all);
+        document.getElementById('avgLatency').textContent = data.average_latency_ms.toFixed(0) + 'ms';
+        document.getElementById('totalTokens').textContent = formatNumber(data.total_tokens);
+        document.getElementById('totalCost').textContent = '$' + data.total_cost_usd.toFixed(4);
+        document.getElementById('errorRate').textContent = data.error_rate_percent.toFixed(1) + '%';
+    } catch (e) {
+        console.error('Error loading stats:', e);
+    }
+}
+
+async function loadCharts() {
+    try {
+        const res = await fetch('/api/analytics/charts/?days=7');
+        const data = await res.json();
+        
+        // Token Usage Chart
+        const tokenCtx = document.getElementById('tokenUsageChart').getContext('2d');
+        if (tokenChart) tokenChart.destroy();
+        
+        if (data.tokens_over_time && data.tokens_over_time.length > 0) {
+            tokenChart = new Chart(tokenCtx, {
+                type: 'bar',
+                data: {
+                    labels: data.tokens_over_time.map(d => new Date(d.period).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})),
+                    datasets: [{
+                        label: 'Total Tokens',
+                        data: data.tokens_over_time.map(d => d.total_tokens || 0),
+                        backgroundColor: 'rgba(79, 70, 229, 0.8)',
+                        borderRadius: 6,
+                        borderSkipped: false
+                    }, {
+                        label: 'Requests',
+                        data: data.tokens_over_time.map(d => d.requests || 0),
+                        backgroundColor: 'rgba(5, 150, 105, 0.6)',
+                        borderRadius: 6,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: true, position: 'top' } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#718096' } },
+                        y: { grid: { color: '#f0ece7' }, ticks: { color: '#718096' }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+        
+        // Status Chart - Count success vs error
+        const statusCtx = document.getElementById('statusChart').getContext('2d');
+        if (statusChart) statusChart.destroy();
+        
+        const overviewRes = await fetch('/api/analytics/overview/');
+        const overview = await overviewRes.json();
+        
+        statusChart = new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Success', 'Error'],
+                datasets: [{
+                    data: [overview.success_count, overview.error_count],
+                    backgroundColor: ['#10b981', '#ef4444'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '70%',
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#718096', padding: 16 } }
+                }
+            }
+        });
+    } catch (e) {
+        console.error('Error loading charts:', e);
+    }
+}
+
+async function loadTraces() {
+    const tbody = document.getElementById('tracesTable');
+    
+    try {
+        const res = await fetch(`/api/traces/?page=${currentPage}`);
+        const data = await res.json();
+        
+        if (!data.results || data.results.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="empty-state">
+                        <i class="bi bi-inbox"></i>
+                        <p>No requests yet. Try the Test LLM page!</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        tbody.innerHTML = data.results.map(t => `
+            <tr>
+                <td>${formatExactTime(t.timestamp, false)}</td>
+                <td>${t.user_identifier}</td>
+                <td>${formatNumber(t.total_tokens)}</td>
+                <td>${t.latency_ms.toFixed(0)}ms</td>
+                <td>$${parseFloat(t.cost_usd).toFixed(6)}</td>
+                <td><span class="badge badge-${t.status === 'success' ? 'success' : 'danger'}">${t.status}</span></td>
+            </tr>
+        `).join('');
+        
+        document.getElementById('showingCount').textContent = `Showing ${data.results.length} of ${data.count} traces`;
+        updatePagination(data.count);
+    } catch (e) {
+        console.error('Error loading traces:', e);
+        tbody.innerHTML = '<tr><td colspan="6" class="text-danger">Failed to load</td></tr>';
+    }
+}
+
+function updatePagination(total) {
+    const totalPages = Math.ceil(total / 25);
+    const pagination = document.getElementById('pagination');
+    
+    if (totalPages <= 1) {
+        pagination.innerHTML = '';
+        return;
+    }
+    
+    let html = `
+        <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">‹</a>
+        </li>
+    `;
+    
+    for (let i = 1; i <= Math.min(totalPages, 5); i++) {
+        html += `
+            <li class="page-item ${currentPage === i ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
+            </li>
+        `;
+    }
+    
+    html += `
+        <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">›</a>
+        </li>
+    `;
+    
+    pagination.innerHTML = html;
+}
+
+function goToPage(page) {
+    currentPage = page;
+    loadTraces();
+}
+
+// Header User Dropdown
+const headerUserToggle = document.getElementById('headerUserToggle');
+const headerDropdown = document.getElementById('headerDropdown');
+
+if (headerUserToggle && headerDropdown) {
+    headerUserToggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        headerDropdown.classList.toggle('show');
+    });
+    
+    document.addEventListener('click', function(e) {
+        if (!headerUserToggle.contains(e.target) && !headerDropdown.contains(e.target)) {
+            headerDropdown.classList.remove('show');
+        }
+    });
+}
+
+// Header Logout Button
+const headerLogoutBtn = document.getElementById('headerLogoutBtn');
+if (headerLogoutBtn) {
+    headerLogoutBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const logoutModal = document.getElementById('logoutModal');
+        if (logoutModal) {
+            logoutModal.classList.add('show');
+        }
+    });
+}
+</script>
+{% endblock %}

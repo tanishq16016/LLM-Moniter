@@ -1,0 +1,24 @@
+# Django and REST Framework
+Django>=4.2,<5.0
+djangorestframework>=3.14.0
+django-cors-headers>=4.3.0
+
+# Database
+psycopg2-binary>=2.9.9
+
+# Cache
+redis>=5.0.0
+django-redis>=5.4.0
+
+# LLM Integration
+groq>=0.4.0
+
+# Security and Configuration
+cryptography>=41.0.0
+python-decouple>=3.8
+
+# Utilities
+python-dateutil>=2.8.2
+
+# Authentication
+django-allauth>=0.58.0

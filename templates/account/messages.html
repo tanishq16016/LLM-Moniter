@@ -1,0 +1,14 @@
+{% if messages %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Small delay to ensure showToast from utils.js is loaded
+    setTimeout(function() {
+        {% for message in messages %}
+        if (typeof showToast === 'function') {
+            showToast('{{ message|escapejs }}', '{{ message.tags }}');
+        }
+        {% endfor %}
+    }, 100);
+});
+</script>
+{% endif %}
