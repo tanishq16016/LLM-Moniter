@@ -262,7 +262,7 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
 
 # Django Allauth Configuration
-SITE_ID = 1
+SITE_ID = 2  # Points to llm-moniter.vercel.app
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
