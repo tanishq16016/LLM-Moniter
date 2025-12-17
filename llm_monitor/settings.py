@@ -203,7 +203,7 @@ LLM_PRICING = {
 # Default model for testing
 DEFAULT_LLM_MODEL = 'llama-3.1-8b-instant'
 
-# Logging Configuration
+# Logging Configuration - Serverless compatible (console only)
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -221,11 +221,6 @@ LOGGING = {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
-        },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'django.log',
-            'formatter': 'verbose',
         },
     },
     'root': {
@@ -245,10 +240,6 @@ LOGGING = {
         },
     },
 }
-
-# Create logs directory if it doesn't exist
-LOG_DIR = BASE_DIR / 'logs'
-LOG_DIR.mkdir(exist_ok=True)
 
 # Security settings for production
 if not DEBUG:
