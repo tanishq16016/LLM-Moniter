@@ -46,8 +46,8 @@ venv.bak/
 *.swp
 *.swo
 
-# Static files
-staticfiles/
+# Static files - NOT ignoring staticfiles/ for Vercel deployment
+# staticfiles/
 static_collected/
 
 # Media files
