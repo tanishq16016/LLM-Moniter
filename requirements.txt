@@ -19,6 +19,7 @@ python-decouple>=3.8
 
 # Utilities
 python-dateutil>=2.8.2
+requests>=2.31.0
 
 # Authentication
 django-allauth>=0.58.0
