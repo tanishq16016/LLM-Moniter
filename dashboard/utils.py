@@ -31,8 +31,8 @@ LLM_PRICING = getattr(settings, 'LLM_PRICING', {
     'llama-3.1-8b-instant': {'input': 0.05, 'output': 0.08},
 })
 
-# Default model
-DEFAULT_MODEL = 'llama-3.1-8b-instant'
+# Default model (fallback if not configured)
+DEFAULT_MODEL = getattr(settings, 'DEFAULT_LLM_MODEL', 'llama-3.1-8b-instant')
 
 # Cache timeout (30 seconds for real-time stats)
 CACHE_TTL = getattr(settings, 'CACHE_TTL', 30)
@@ -647,6 +647,7 @@ def get_available_models() -> list:
 def test_api_connection() -> Tuple[bool, str]:
     """
     Test the Groq API connection with a simple request.
+    Uses the configured default model.
     
     Returns:
         Tuple[bool, str]: (success, message)
@@ -655,16 +656,20 @@ def test_api_connection() -> Tuple[bool, str]:
     if not client:
         return False, "API key not configured"
     
+    # Get default model from configuration
+    config = APIConfiguration.load()
+    test_model = config.default_model or DEFAULT_MODEL
+    
     try:
         completion = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=test_model,
             messages=[{"role": "user", "content": "Say 'API connection successful!' in exactly those words."}],
             max_tokens=20,
             temperature=0,
         )
         
         response = completion.choices[0].message.content
-        return True, f"Connection successful! Response: {response}"
+        return True, f"Connection successful with {test_model}! Response: {response}"
     except Exception as e:
         return False, f"Connection failed: {str(e)}"
 

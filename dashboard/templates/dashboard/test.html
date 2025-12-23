@@ -26,8 +26,27 @@
         {% endif %}
         
         <div class="form-group">
+            <label class="form-label" style="font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">
+                <i class="bi bi-cpu" style="margin-right: 6px;"></i>Select Model
+            </label>
+            <div style="position: relative;">
+                <select class="form-control model-dropdown" id="modelSelect" {% if not has_api_key %}disabled{% endif %} style="padding-right: 40px; font-weight: 500; border: 2px solid #e2e8f0; border-radius: 8px; height: 45px; appearance: none; background-color: #fff; cursor: pointer; transition: all 0.2s ease;">
+                    {% for model in available_models %}
+                    <option value="{{ model.name }}" {% if model.name == default_model %}selected{% endif %}>
+                        {{ model.name }} - {{ model.description }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <i class="bi bi-chevron-down" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #64748b; font-size: 14px;"></i>
+            </div>
+            <div class="text-muted mt-2" style="font-size: 12px; padding: 8px 12px; background: #f8fafc; border-radius: 6px; border-left: 3px solid #4f46e5;" id="modelPriceInfo">
+                <i class="bi bi-info-circle"></i> Select a model to see pricing
+            </div>
+        </div>
+
+        <div class="form-group">
             <label class="form-label">Prompt</label>
-            <textarea class="form-control" id="promptInput" rows="12" 
+            <textarea class="form-control" id="promptInput" rows="10" 
                 placeholder="Enter your prompt here..." {% if not has_api_key %}disabled{% endif %}></textarea>
             <div class="text-muted mt-2" style="font-size: 12px;">
                 <span id="charCount">0</span> characters
@@ -48,6 +67,10 @@
         
         <div class="response-area" id="responseArea">
             <span class="text-muted">Response will appear here...</span>
+        </div>
+        
+        <div id="modelUsedInfo" style="display: none; margin-top: 12px; padding: 10px 14px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 6px; font-size: 13px; color: #047857;">
+            <i class="bi bi-check-circle-fill" style="margin-right: 6px;"></i> Response generated with <strong id="usedModelName"></strong>
         </div>
         
         <div class="metrics-row" id="metricsRow" style="display: none;">
@@ -130,6 +153,15 @@
 </div>
 
 <style>
+    .model-dropdown:hover:not(:disabled) {
+        border-color: #4f46e5 !important;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+    .model-dropdown:focus {
+        outline: none;
+        border-color: #4f46e5 !important;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+    }
     .star-rating i {
         color: #d1d5db;
         transition: all 0.2s ease;
@@ -153,8 +185,20 @@
 const promptInput = document.getElementById('promptInput');
 const charCount = document.getElementById('charCount');
 const sendBtn = document.getElementById('sendBtn');
+const modelSelect = document.getElementById('modelSelect');
 let currentTraceId = null;
 let feedbackModal = null;
+
+// Model pricing data
+const modelPricing = {
+    {% for model in available_models %}
+    '{{ model.name }}': {
+        input: {{ model.input_price }},
+        output: {{ model.output_price }},
+        description: '{{ model.description }}'
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+};
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
@@ -164,10 +208,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Setup star rating
     setupStarRating();
     
+    // Update model pricing info
+    updateModelPricing();
+    
     // Setup event listeners
     promptInput.addEventListener('input', function() {
         charCount.textContent = this.value.length;
     });
+    
+    modelSelect.addEventListener('change', updateModelPricing);
     
     sendBtn.addEventListener('click', sendRequest);
     
@@ -187,6 +236,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Submit feedback button
     document.getElementById('submitFeedbackBtn').addEventListener('click', submitFeedback);
 });
+
+// Update model pricing info display
+function updateModelPricing() {
+    const selectedModel = modelSelect.value;
+    const pricing = modelPricing[selectedModel];
+    if (pricing) {
+        document.getElementById('modelPriceInfo').innerHTML = 
+            `<i class="bi bi-info-circle"></i> Input: $${pricing.input} / 1M tokens &middot; Output: $${pricing.output} / 1M tokens`;
+    }
+}
 
 // Setup star rating functionality
 function setupStarRating() {
@@ -317,6 +376,7 @@ async function sendRequest() {
         return;
     }
     
+    const selectedModel = modelSelect.value;
     const responseArea = document.getElementById('responseArea');
     const metricsRow = document.getElementById('metricsRow');
     const feedbackSection = document.getElementById('feedbackSection');
@@ -330,7 +390,7 @@ async function sendRequest() {
     
     sendBtn.disabled = true;
     sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Sending...';
-    responseArea.innerHTML = '<span class="text-muted">Generating response...</span>';
+    responseArea.innerHTML = '<span class="text-muted">Generating response with ' + selectedModel + '...</span>';
     metricsRow.style.display = 'none';
     feedbackSection.style.display = 'none';
     
@@ -343,7 +403,7 @@ async function sendRequest() {
             },
             body: JSON.stringify({
                 prompt: prompt,
-                model: 'llama-3.1-8b-instant'
+                model: selectedModel
             })
         });
         
@@ -353,6 +413,7 @@ async function sendRequest() {
             responseArea.innerHTML = `<span class="text-danger">${data.error}</span>`;
             showToast('Error: ' + data.error, 'danger');
             feedbackSection.style.display = 'none';
+            document.getElementById('modelUsedInfo').style.display = 'none';
         } else {
             responseArea.textContent = data.response;
             
@@ -360,6 +421,10 @@ async function sendRequest() {
             document.getElementById('metricLatency').textContent = data.latency_ms.toFixed(0) + 'ms';
             document.getElementById('metricCost').textContent = '$' + data.cost_usd.toFixed(6);
             metricsRow.style.display = 'flex';
+            
+            // Show model used
+            document.getElementById('usedModelName').textContent = selectedModel;
+            document.getElementById('modelUsedInfo').style.display = 'block';
             
             // Store trace ID and show feedback section
             currentTraceId = data.trace_id;

@@ -94,7 +94,8 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th>Time</th>
+                    <th>Date</th>
+                    <th>Model</th>
                     <th>Tokens</th>
                     <th>Cost</th>
                     <th>Latency</th>
@@ -103,7 +104,7 @@
             </thead>
             <tbody id="activityTable">
                 <tr>
-                    <td colspan="5" style="padding: 40px; text-align: center; color: var(--text-muted);">
+                    <td colspan="6" style="padding: 40px; text-align: center; color: var(--text-muted);">
                         Loading data...
                     </td>
                 </tr>
@@ -257,13 +258,14 @@ function updateTable(traces) {
     const tbody = document.getElementById('activityTable');
     
     if (!traces || traces.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted" style="padding: 40px;">No data yet. Go to Test page and send some requests!</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted" style="padding: 40px;">No data yet. Go to Test page and send some requests!</td></tr>';
         return;
     }
     
     tbody.innerHTML = traces.map(t => `
         <tr>
-            <td>${formatExactTime(t.timestamp, false)}</td>
+            <td>${formatDate(t.timestamp)}</td>
+            <td><span class="badge" style="background: #4f46e5; color: white; font-size: 11px;">${t.model_name || 'N/A'}</span></td>
             <td>${t.total_tokens || 0}</td>
             <td>$${parseFloat(t.cost_usd || 0).toFixed(6)}</td>
             <td>${(t.latency_ms || 0).toFixed(0)}ms</td>

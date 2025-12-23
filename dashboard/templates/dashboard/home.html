@@ -100,7 +100,8 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Time</th>
+                <th>Date</th>
+                <th>Model</th>
                 <th>User</th>
                 <th>Tokens</th>
                 <th>Latency</th>
@@ -110,7 +111,7 @@
         </thead>
         <tbody id="tracesTable">
             <tr>
-                <td colspan="6" class="empty-state">
+                <td colspan="7" class="empty-state">
                     <div class="spinner"></div>
                     <span style="margin-left: 10px;">Loading...</span>
                 </td>
@@ -241,7 +242,7 @@ async function loadTraces() {
         if (!data.results || data.results.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="6" class="empty-state">
+                    <td colspan="7" class="empty-state">
                         <i class="bi bi-inbox"></i>
                         <p>No requests yet. Try the Test LLM page!</p>
                     </td>
@@ -252,7 +253,8 @@ async function loadTraces() {
         
         tbody.innerHTML = data.results.map(t => `
             <tr>
-                <td>${formatExactTime(t.timestamp, false)}</td>
+                <td>${formatDate(t.timestamp)}</td>
+                <td><span class="badge" style="background: #4f46e5; color: white; font-size: 11px;">${t.model_name || 'N/A'}</span></td>
                 <td>${t.user_identifier}</td>
                 <td>${formatNumber(t.total_tokens)}</td>
                 <td>${t.latency_ms.toFixed(0)}ms</td>

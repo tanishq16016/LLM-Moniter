@@ -38,22 +38,39 @@
         <div id="testResult" style="margin-top: 16px; display: none;"></div>
     </div>
     
-    <!-- Model Info -->
+    <!-- Model Configuration -->
     <div class="settings-section">
         <div class="settings-title">
-            <i class="bi bi-cpu" style="margin-right: 8px; color: #059669;"></i> Active Model
+            <i class="bi bi-cpu" style="margin-right: 8px; color: #059669;"></i> Model Configuration
         </div>
         
-        <div style="display: flex; align-items: center; gap: 16px; padding: 16px; background: var(--bg-primary); border-radius: 8px;">
-            <div style="width: 56px; height: 56px; background: #f0fdf9; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #059669; font-size: 24px; flex-shrink: 0;">
-                <i class="bi bi-cpu"></i>
-            </div>
-            <div style="flex: 1;">
-                <div style="font-weight: 600; color: var(--text-primary); font-size: 14px;">llama-3.1-8b-instant</div>
-                <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">$0.05 / 1M input tokens</div>
-                <div style="font-size: 12px; color: var(--text-secondary);">$0.08 / 1M output tokens</div>
+        <div class="form-group">
+            <label class="form-label">Default Model</label>
+            <select class="form-control" id="defaultModelSelect">
+                {% for model in available_models %}
+                <option value="{{ model.name }}" {% if model.name == default_model %}selected{% endif %}>
+                    {{ model.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div id="modelInfo" style="padding: 16px; background: var(--bg-primary); border-radius: 8px; margin-top: 12px;">
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="width: 48px; height: 48px; background: #f0fdf9; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #059669; font-size: 20px; flex-shrink: 0;">
+                    <i class="bi bi-cpu"></i>
+                </div>
+                <div style="flex: 1;">
+                    <div id="modelName" style="font-weight: 600; color: var(--text-primary); font-size: 14px;">{{ default_model }}</div>
+                    <div id="modelDescription" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;"></div>
+                    <div id="modelPricing" style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;"></div>
+                </div>
             </div>
         </div>
+        
+        <button type="button" class="btn btn-primary" id="updateModelBtn" style="width: 100%; margin-top: 12px;">
+            <i class="bi bi-check-lg"></i> Update Default Model
+        </button>
     </div>
     
     <!-- Data Management -->
@@ -105,6 +122,72 @@
 
 {% block extra_js %}
 <script>
+// Model data from backend
+const availableModels = {
+    {% for model in available_models %}
+    '{{ model.name }}': {
+        name: '{{ model.name }}',
+        description: '{{ model.description }}',
+        inputPrice: {{ model.input_price }},
+        outputPrice: {{ model.output_price }}
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+};
+
+// Update model info display
+function updateModelInfo(modelName) {
+    const model = availableModels[modelName];
+    if (model) {
+        document.getElementById('modelName').textContent = model.name;
+        document.getElementById('modelDescription').textContent = model.description;
+        document.getElementById('modelPricing').textContent = 
+            `Input: $${model.inputPrice} / 1M tokens · Output: $${model.outputPrice} / 1M tokens`;
+    }
+}
+
+// Initialize model info on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const defaultModel = document.getElementById('defaultModelSelect').value;
+    updateModelInfo(defaultModel);
+    
+    // Update info when selection changes
+    document.getElementById('defaultModelSelect').addEventListener('change', function() {
+        updateModelInfo(this.value);
+    });
+});
+
+// Update default model
+document.getElementById('updateModelBtn').addEventListener('click', async function() {
+    const selectedModel = document.getElementById('defaultModelSelect').value;
+    
+    this.disabled = true;
+    this.innerHTML = '<span class="spinner"></span> Updating...';
+    
+    try {
+        const res = await fetch('/api/config/default-model/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify({ model: selectedModel })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success) {
+            showToast('Default model updated to ' + selectedModel, 'success');
+        } else {
+            showToast('Failed to update: ' + (data.error || 'Unknown error'), 'danger');
+        }
+    } catch (e) {
+        showToast('Update failed', 'danger');
+    } finally {
+        this.disabled = false;
+        this.innerHTML = '<i class="bi bi-check-lg"></i> Update Default Model';
+    }
+});
+
 document.getElementById('saveKeyBtn').addEventListener('click', async function() {
     const apiKey = document.getElementById('apiKeyInput').value.trim();
     

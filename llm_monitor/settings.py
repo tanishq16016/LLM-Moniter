@@ -90,28 +90,30 @@ DATABASES = {
 }
 
 # Redis Cache Configuration - Falls back to local memory if Redis unavailable
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
+try:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': config('REDIS_URL', default='redis://localhost:6379/1'),
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'SOCKET_CONNECT_TIMEOUT': 5,
+                'SOCKET_TIMEOUT': 5,
+                'RETRY_ON_TIMEOUT': True,
+                'CONNECTION_POOL_KWARGS': {'max_connections': 50},
+                'IGNORE_EXCEPTIONS': True,  # Fallback to DB if Redis fails
+            },
+            'KEY_PREFIX': 'llm_monitor',
+        }
     }
-}
-
-# Uncomment below and comment above to use Redis when available
-# CACHES = {
-#     'default': {
-#         'BACKEND': 'django_redis.cache.RedisCache',
-#         'LOCATION': config('REDIS_URL', default='redis://localhost:6379/1'),
-#         'OPTIONS': {
-#             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-#             'SOCKET_CONNECT_TIMEOUT': 5,
-#             'SOCKET_TIMEOUT': 5,
-#             'RETRY_ON_TIMEOUT': True,
-#             'CONNECTION_POOL_KWARGS': {'max_connections': 50},
-#         },
-#         'KEY_PREFIX': 'llm_monitor',
-#     }
-# }
+except:
+    # Fallback to local memory cache if Redis is not available
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+        }
+    }
 
 # Cache time to live is 30 seconds for real-time dashboard stats
 CACHE_TTL = 30
@@ -204,7 +206,12 @@ LLM_PRICING = {
     'llama-3.1-8b-instant': {
         'input': 0.05,
         'output': 0.08,
-        'description': 'Llama 3.1 8B - Fast responses',
+        'description': 'Llama 3.1 8B - Fast and efficient',
+    },
+    'llama-3.3-70b-versatile': {
+        'input': 0.59,
+        'output': 0.79,
+        'description': 'Llama 3.3 70B - Most capable',
     },
 }
 
