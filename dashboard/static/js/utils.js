@@ -662,6 +662,8 @@ if (typeof module !== 'undefined' && module.exports) {
         formatBytes,
         formatTimestamp,
         formatRelativeTime,
+        formatExactTime,
+        formatDate,
         formatDateForInput,
         truncateString,
         escapeHtml,
