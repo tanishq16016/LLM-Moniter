@@ -151,6 +151,24 @@ function formatExactTime(isoString, includeSeconds = true) {
 }
 
 /**
+ * Format timestamp to date only (no time)
+ * @param {string} isoString - ISO timestamp string (UTC)
+ * @returns {string} Formatted date string
+ */
+function formatDate(isoString) {
+    if (!isoString) return '-';
+    
+    const date = new Date(isoString);
+    const options = {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    };
+    
+    return date.toLocaleDateString('en-US', options);
+}
+
+/**
  * Format date for input[type="date"]
  * @param {Date} date - Date object
  * @returns {string} YYYY-MM-DD format
