@@ -154,9 +154,13 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # WhiteNoise configuration for static files serving
 STORAGES = {
     "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+# Disable whitenoise compression on Vercel (it does its own compression)
+if not DEBUG:
+    WHITENOISE_MAX_AGE = 0  # Disable caching in production for now
 
 # Media files
 MEDIA_URL = '/media/'
